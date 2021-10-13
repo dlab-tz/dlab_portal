@@ -1,6 +1,6 @@
 # Developer Guide
 
-Setup guide for (dLab open data portal)[https://github.com/dlab-tz/dlab_portal] development
+Setup guide for [dLab open data portal](https://github.com/dlab-tz/dlab_portal) development
 
 ## Requirements
 
