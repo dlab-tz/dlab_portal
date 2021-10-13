@@ -272,7 +272,7 @@ $ sudo mv /etc/solr/conf/schema.xml /etc/solr/conf/schema.xml.bak
 $ sudo ln -s /usr/lib/ckan/default/src/ckan/ckan/config/solr/schema.xml /etc/solr/conf/schema.xml
 ```
 
-- Now restart Tomcat & Solr and check Solr running `(http://localhost:8983/solr/)[http://localhost:8983/solr/]`
+- Now restart Tomcat & Solr and check Solr running `[http://localhost:8983/solr/](http://localhost:8983/solr/)`
 
 ```sh
 $ sudo mv /etc/systemd/system/tomcat9.d /etc/systemd/system/tomcat9.service.d
