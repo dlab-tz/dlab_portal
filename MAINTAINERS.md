@@ -55,7 +55,7 @@ Once development is through, remember to clean the database and re-initialize it
 
 All options that can be set on admin page can be edited in CKAN configuration file.
 
-- Edit confgiuration file
+- Edit CKAN config file
 ```sh
 $ sudo vi /etc/ckan/default/ckan.ini
 ```
