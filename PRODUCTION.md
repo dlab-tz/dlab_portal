@@ -175,6 +175,8 @@ $ mkdir -p ~/ckan/lib
 $ sudo ln -s ~/ckan/lib /usr/lib/ckan
 $ mkdir -p ~/ckan/etc
 $ sudo ln -s ~/ckan/etc /etc/ckan
+$ mkdir -p ~/ckan/var/lib
+$ sudo ln -s ~/ckan/var/lib /var/lib/ckan
 ```
 
 - Create a Python(`python3`) virtual environment (virtualenv) to install CKAN into, and activate it.

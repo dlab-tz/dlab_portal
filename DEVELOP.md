@@ -175,6 +175,8 @@ $ mkdir -p ~/workspace/ckan/lib
 $ sudo ln -s ~/workspace/ckan/lib /usr/lib/ckan
 $ mkdir -p ~/workspace/ckan/etc
 $ sudo ln -s ~/workspace/ckan/etc /etc/ckan
+$ mkdir -p ~/workspace/ckan/var/lib
+$ sudo ln -s ~/workspace/ckan/var/lib /var/lib/ckan
 ```
 
 - Create a Python(`python3`) virtual environment (virtualenv) to install CKAN into, and activate it.
@@ -359,6 +361,7 @@ $ curl -X GET "http://127.0.0.1:5000/api/3/action/datastore_search?resource_id=_
 To run CKAN in development and testing use:
 
 ```sh
+$ . /usr/lib/ckan/default/bin/activate
 $ cd /usr/lib/ckan/default/src/ckan
 $ ckan -c /etc/ckan/default/ckan.ini run
 ```
