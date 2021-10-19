@@ -12,13 +12,14 @@ Installed version of CKAN either in [development](https://github.com/dlab-tz/dla
 
 - Activate CKAN virtual environment and navigate to CKAN source
 ```sh
+$ pyenv shell 3.8.0
 $ . /usr/lib/ckan/default/bin/activate
 $ cd /usr/lib/ckan/default/src/ckan
 ```
 
 - Create a new administrator
 ```sh
-ckan -c /etc/ckan/default/ckan.ini sysadmin add ckan_default email=ckan_default@localhost name=ckan_default
+ckan -c /etc/ckan/default/ckan.ini sysadmin add dlab_ckan_default email=info@dlab.or.tz name=dlab_ckan_default
 ```
 Accept to create a new user by press `Y`, then press `Enter`, then enter a password on the prompt.
 
@@ -51,58 +52,39 @@ ckan -c /etc/ckan/default/ckan.ini seed vocabs
 Once development is through, remember to clean the database and re-initialize it for production usage.
 
 
-## Configuration Changes
-
-All options that can be set on admin page can be edited in CKAN configuration file.
-
-- Edit CKAN config file
-```sh
-$ sudo vi /etc/ckan/default/ckan.ini
-```
-
-- Then restart
-```sh
-$ sudo supervisorctl restart ckan-uwsgi:*
-```
-
-or
-
-```sh
-ckan -c /etc/ckan/default/ckan.ini run
-```
-
-## FileStore and File Uploads
+## Cache Store, FileStore and File Uploads
 
 - Create a directory where CKAN will store uploaded files
 ```sh
 $ sudo mkdir -p /var/lib/ckan/default
 ```
 
-- Edit CKAN config file to set `storage_path`
+- Edit CKAN config file to set `cache_dir` and `storage_path`
 ```sh
 $ sudo vi /etc/ckan/default/ckan.ini
 ```
 
 ```ini
+cache_dir = /var/lib/ckan/default/data/
 ckan.storage_path = /var/lib/ckan/default
 ```
 
 - Set permissions to allow Ngix's user to read, write and execute
 ```sh
-$ sudo chown www-data /var/lib/ckan/default
-$ sudo chmod u+rwx /var/lib/ckan/default
+$ sudo chown -R www-data /var/lib/ckan/default
+$ sudo chmod -R u+rwx /var/lib/ckan/default
 $ sudo chown -R `whoami` /var/lib/ckan/default
 ```
 
 - Then restart
 ```sh
-$ sudo supervisorctl restart ckan-uwsgi:*
+$ sudo systemctl restart supervisor
 ```
 
 or
 
 ```sh
-ckan -c /etc/ckan/default/ckan.ini run
+$ ckan -c /etc/ckan/default/ckan.ini run
 ```
 
 ## Page View Tracking
@@ -118,10 +100,11 @@ ckan.tracking_enabled = true
 
 - Then restart
 ```sh
-$ sudo supervisorctl restart ckan-uwsgi:*
+$ sudo systemctl restart supervisor
 ```
 
 or
 
 ```sh
-ckan -c /etc/ckan/default/ckan.ini run
+$ ckan -c /etc/ckan/default/ckan.ini run
+```

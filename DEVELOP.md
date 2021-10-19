@@ -4,31 +4,35 @@ Setup guide for [dLab open data portal](https://github.com/dlab-tz/dlab_portal) 
 
 ## Requirements
 
+
 ### Software Requirements
 
-- Ubuntu Server 18.04 64-bit
-- Python v3.6+
-- Java OpenJDK v11+
-- PostgreSQL v9.5+
-- Git   v2.17+
-- Apache Solr
-- Jetty/Tomcat
-- Redis
-- Nginx
+| Software      | Version         |
+|:--------------|:----------------|
+| Ubuntu Server | v18.04+, 64-bit |
+| Nginx         | v1.14+          |
+| PostgreSQL    | v9.5+           |
+| Redis         | v6+             |
+| Python        | v3.8+           |
+| Java OpenJDK  | v11+            |
+| Tomcat        | v9+             |
+| Apache Solr   | v3.6.2+         |
+
 
 ### Ports Requirements
 
-| Service   | Port  | Used for  |
-| :-------- | :---: | :-------- |
-|NGINX      | 80    | Proxy     |
-|uWSGI      | 8080  | Web Server|
-|uWSGI      | 8800  | DataPusher|
-|Solr/Jetty | 8983  | Search    |
-|PostgreSQL | 5432  | Database  |
-|Redis      | 6379  | Search    |
+| Service     | Port  | Used for   |
+| :---------- | :---: | :--------- |
+| NGINX       | 80    | Proxy      |
+| uWSGI       | 5000  | Web Server |
+| uWSGI       | 8800  | DataPusher |
+| Solr/Tomcat | 8983  | Search     |
+| PostgreSQL  | 5432  | Database   |
+| Redis       | 6379  | Search     |
 
 
 ## Installation
+
 
 ### Update Ubuntu Server
 
@@ -50,10 +54,11 @@ sudo su <<EOF
 sudo apt-get update -y
 sudo apt-get install -y curl wget make g++ git
 sudo apt-get install -y libkrb5-dev build-essential libgeos-dev proj-bin
-sudo apt-get install -y libpq5 libpq-dev supervisor
-sudo apt-get install -y python-dev libxslt1-dev libxml2-dev zlib1g-dev libffi-dev
+sudo apt-get install -y libpq5 libpq-dev libsqlite3-dev libbz2-dev libreadline-dev
+sudo apt-get install -y libxslt1-dev libxml2-dev zlib1g-dev libffi-dev
 EOF
 ```
+
 
 ### Install Python
 
@@ -68,6 +73,36 @@ $ curl https://pyenv.run | bash
 $ pyenv install -v 3.8.0
 ```
 
+- Configure `.profile` for pyenv
+```sh
+sudo vi ~/.profile
+```
+
+Then, add below snippets after initial comment lines
+```sh
+# Setup Python Version Manager (pyenv)
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+```
+
+- Configure `.bashrc` for pyenv
+```sh
+$ sudo vi ~/.bashrc
+```
+
+Then, add below snippets at the end of the `.bashrc` file.
+```bash
+# Setup Python Version Manager (pyenv)
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+```
+
+- Restart your shell so the path changes take effect
+```sh
+exec $SHELL
+```
+
 - Install required Python dependencies
 ```sh
 sudo su <<EOF
@@ -75,6 +110,7 @@ sudo apt-get update -y
 sudo apt-get install -y python3-dev python3-pip python3-venv
 EOF
 ```
+
 
 ### Install Nginx Web Server
 ```sh
@@ -85,6 +121,7 @@ sudo systemctl enable nginx
 sudo systemctl start nginx
 EOF
 ```
+
 
 ### Install Redis
 
@@ -98,15 +135,42 @@ sudo systemctl start redis-server
 EOF
 ```
 
+
 ### Install PostgreSQL
 
+- Install latest postgresql
 ```sh
 sudo su <<EOF
-sudo apt update -y
-sudo apt install -y postgresql postgresql-contrib
+sudo apt-get update -y
+sudo apt-get install -y postgresql postgresql-contrib
 sudo systemctl start postgresql
 EOF
 ```
+
+- Enable administrative login by UNIX domain socket
+
+```sh
+$ sudo vi
+```
+
+Change,
+```ini
+# Database administrative login by Unix domain socket
+local   all             postgres                                peer
+```
+
+to
+
+```ini
+# Database administrative login by Unix domain socket
+local   all             postgres                                trust
+```
+
+- Restart postgresql
+```sh
+$ sudo systemctl restart postgresql
+```
+
 
 ### Install OpenJDK (Java 11)
 
@@ -114,9 +178,9 @@ EOF
 
 ```sh
 sudo su <<EOF
-sudo apt update -y
-sudo apt install -y default-jdk
-sudo apt install -y default-jre
+sudo apt-get update -y
+sudo apt-get install -y default-jdk
+sudo apt-get install -y default-jre
 EOF
 ```
 
@@ -145,26 +209,39 @@ but do not include the /bin portion of the path.
 $ sudo vi /etc/environment
 ```
 
-> JAVA_HOME="copied path without /bin"
+```ini
+JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+```
 
-Apply changes and verify `JAVA_HOME`
+- Apply changes
 
 ```sh
 $ source /etc/environment
 ```
 
+- Restart your shell so the path changes take effect
+```sh
+exec $SHELL
+```
+
+- Verify `JAVA_HOME`
 ```sh
 $ echo $JAVA_HOME
 ```
+
 
 ### Install Apache Solr and Tomcat(Jetty)
 
 ```sh
 sudo su <<EOF
-sudo apt update -y
-sudo apt install -y solr-tomcat
+sudo apt-get update -y
+sudo apt-get install -y solr-tomcat
+sudo mv /etc/systemd/system/tomcat9.d /etc/systemd/system/tomcat9.service.d
+sudo systemctl daemon-reload
+sudo systemctl start tomcat9
 EOF
 ```
+
 
 ### Install CKAN
 
@@ -184,6 +261,7 @@ $ sudo ln -s ~/workspace/ckan/var/lib /var/lib/ckan
 ```sh
 $ sudo mkdir -p /usr/lib/ckan/default
 $ sudo chown `whoami` /usr/lib/ckan/default
+$ pyenv shell 3.8.0
 $ python3 -m venv /usr/lib/ckan/default
 $ . /usr/lib/ckan/default/bin/activate
 ```
@@ -209,6 +287,7 @@ deactivate
 
 
 ## Configuration
+
 
 ### Configure PostgreSQL
 
@@ -244,8 +323,9 @@ $ ckan generate config /etc/ckan/default/ckan.ini
 ```ini
 sqlalchemy.url = postgresql://ckan_default:<ckan_default_pass>@localhost/ckan_default
 ckan.site_id = default
-ckan.site_url = http://127.0.0.1:5000 (or http://<sub-domain>.<domain>.<com|org>)
+ckan.site_url = http://127.0.0.1:5000
 ```
+
 
 ### Configure Apache Solr
 
@@ -277,8 +357,6 @@ $ sudo ln -s /usr/lib/ckan/default/src/ckan/ckan/config/solr/schema.xml /etc/sol
 - Now restart Tomcat & Solr and check Solr running `[http://localhost:8983/solr/](http://localhost:8983/solr/)`
 
 ```sh
-$ sudo mv /etc/systemd/system/tomcat9.d /etc/systemd/system/tomcat9.service.d
-$ sudo systemctl daemon-reload
 $ sudo systemctl restart tomcat9
 ```
 
@@ -292,11 +370,13 @@ $ sudo vi /etc/ckan/default/ckan.ini
 solr_url=http://127.0.0.1:8983/solr
 ```
 
+
 ### Configure who.ini
 
 ```sh
 $ ln -s /usr/lib/ckan/default/src/ckan/who.ini /etc/ckan/default/who.ini
 ```
+
 
 ### Create CKAN database tables
 
@@ -304,6 +384,7 @@ $ ln -s /usr/lib/ckan/default/src/ckan/who.ini /etc/ckan/default/who.ini
 $ cd /usr/lib/ckan/default/src/ckan
 $ ckan -c /etc/ckan/default/ckan.ini db init
 ```
+
 
 ### Set up the DataStore
 
@@ -366,4 +447,13 @@ $ cd /usr/lib/ckan/default/src/ckan
 $ ckan -c /etc/ckan/default/ckan.ini run
 ```
 
+or
+
+```sh
+ckan -c /etc/ckan/default/ckan.ini run --host 0.0.0.0 -p 5000
+```
+
 Open [http://127.0.0.1:5000/](http://127.0.0.1:5000/)
+
+
+Check [maintainers guide](https://github.com/dlab-tz/dlab_portal/blob/master/MAINTAINERS.md) for further configurations and management tasks.

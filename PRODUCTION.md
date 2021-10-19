@@ -2,33 +2,38 @@
 
 Setup guide for [dLab open data portal](https://github.com/dlab-tz/dlab_portal) production deployment
 
+
 ## Requirements
+
 
 ### Software Requirements
 
-- Ubuntu Server 18.04 64-bit
-- Python v3.6+
-- Java OpenJDK v11+
-- PostgreSQL v9.5+
-- Git   v2.17+
-- Apache Solr
-- Jetty/Tomcat
-- Redis
-- Nginx
+| Software      | Version         |
+|:--------------|:----------------|
+| Ubuntu Server | v18.04+, 64-bit |
+| Nginx         | v1.14+          |
+| PostgreSQL    | v9.5+           |
+| Redis         | v6+             |
+| Python        | v3.8+           |
+| Java OpenJDK  | v11+            |
+| Tomcat        | v9+             |
+| Apache Solr   | v3.6.2+         |
+
 
 ### Ports Requirements
 
-| Service   | Port  | Used for  |
-| :-------- | :---: | :-------- |
-|NGINX      | 80    | Proxy     |
-|uWSGI      | 8080  | Web Server|
-|uWSGI      | 8800  | DataPusher|
-|Solr/Jetty | 8983  | Search    |
-|PostgreSQL | 5432  | Database  |
-|Redis      | 6379  | Search    |
+| Service     | Port  | Used for   |
+| :---------- | :---: | :--------- |
+| NGINX       | 80    | Proxy      |
+| uWSGI       | 5000  | Web Server |
+| uWSGI       | 8800  | DataPusher |
+| Solr/Tomcat | 8983  | Search     |
+| PostgreSQL  | 5432  | Database   |
+| Redis       | 6379  | Search     |
 
 
 ## Installation
+
 
 ### Update Ubuntu Server
 
@@ -50,10 +55,11 @@ sudo su <<EOF
 sudo apt-get update -y
 sudo apt-get install -y curl wget make g++ git
 sudo apt-get install -y libkrb5-dev build-essential libgeos-dev proj-bin
-sudo apt-get install -y libpq5 libpq-dev supervisor
-sudo apt-get install -y python-dev libxslt1-dev libxml2-dev zlib1g-dev libffi-dev
+sudo apt-get install -y libpq5 libpq-dev libsqlite3-dev libbz2-dev libreadline-dev
+sudo apt-get install -y libxslt1-dev libxml2-dev zlib1g-dev libffi-dev
 EOF
 ```
+
 
 ### Install Python
 
@@ -68,6 +74,36 @@ $ curl https://pyenv.run | bash
 $ pyenv install -v 3.8.0
 ```
 
+- Configure `.profile` for pyenv
+```sh
+sudo vi ~/.profile
+```
+
+Then, add below snippets after initial comment lines
+```sh
+# Setup Python Version Manager (pyenv)
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init --path)"
+```
+
+- Configure `.bashrc` for pyenv
+```sh
+$ sudo vi ~/.bashrc
+```
+
+Then, add below snippets at the end of the `.bashrc` file.
+```bash
+# Setup Python Version Manager (pyenv)
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+```
+
+- Restart your shell so the path changes take effect
+```sh
+exec $SHELL
+```
+
 - Install required Python dependencies
 ```sh
 sudo su <<EOF
@@ -75,6 +111,7 @@ sudo apt-get update -y
 sudo apt-get install -y python3-dev python3-pip python3-venv
 EOF
 ```
+
 
 ### Install Nginx Web Server
 ```sh
@@ -85,6 +122,7 @@ sudo systemctl enable nginx
 sudo systemctl start nginx
 EOF
 ```
+
 
 ### Install Redis
 
@@ -98,15 +136,42 @@ sudo systemctl start redis-server
 EOF
 ```
 
+
 ### Install PostgreSQL
 
+- Install latest postgresql
 ```sh
 sudo su <<EOF
-sudo apt update -y
-sudo apt install -y postgresql postgresql-contrib
+sudo apt-get update -y
+sudo apt-get install -y postgresql postgresql-contrib
 sudo systemctl start postgresql
 EOF
 ```
+
+- Enable administrative login by UNIX domain socket
+
+```sh
+$ sudo vi
+```
+
+Change,
+```ini
+# Database administrative login by Unix domain socket
+local   all             postgres                                peer
+```
+
+to
+
+```ini
+# Database administrative login by Unix domain socket
+local   all             postgres                                trust
+```
+
+- Restart postgresql
+```sh
+$ sudo systemctl restart postgresql
+```
+
 
 ### Install OpenJDK (Java 11)
 
@@ -114,9 +179,9 @@ EOF
 
 ```sh
 sudo su <<EOF
-sudo apt update -y
-sudo apt install -y default-jdk
-sudo apt install -y default-jre
+sudo apt-get update -y
+sudo apt-get install -y default-jdk
+sudo apt-get install -y default-jre
 EOF
 ```
 
@@ -145,26 +210,142 @@ but do not include the /bin portion of the path.
 $ sudo vi /etc/environment
 ```
 
-> JAVA_HOME="copied path without /bin"
+```ini
+JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+```
 
-Apply changes and verify `JAVA_HOME`
+- Apply changes
 
 ```sh
 $ source /etc/environment
 ```
 
+- Restart your shell so the path changes take effect
+```sh
+exec $SHELL
+```
+
+- Verify `JAVA_HOME`
 ```sh
 $ echo $JAVA_HOME
 ```
+
 
 ### Install Apache Solr and Tomcat(Jetty)
 
 ```sh
 sudo su <<EOF
-sudo apt update -y
-sudo apt install -y solr-tomcat
+sudo apt-get update -y
+sudo apt-get install -y solr-tomcat
+sudo mv /etc/systemd/system/tomcat9.d /etc/systemd/system/tomcat9.service.d
+sudo systemctl daemon-reload
+sudo systemctl start tomcat9
 EOF
 ```
+
+
+### Install Supervisor
+
+- Remove old system installed supervisor
+```sh
+sudo su <<EOF
+sudo apt-get remove -y supervisor
+sudo apt-get purge -y supervisor
+sudo apt-get autoclean -y
+sudo apt-get autoremove -y
+sudo apt-get update -y
+EOF
+```
+
+- Ensure common directories for supervisor
+```sh
+$ sudo mkdir -p /var/log/supervisor
+$ sudo mkdir -p /etc/supervisor
+$ sudo mkdir -p /etc/supervisor/conf.d
+```
+
+- Create supervisor config
+```sh
+$ sudo vi /etc/supervisor/supervisor.conf
+```
+
+```ini
+; supervisor config file
+
+[unix_http_server]
+file=/var/run/supervisor.sock   ; (the path to the socket file)
+chmod=0700                       ; sockef file mode (default 0700)
+
+[supervisord]
+logfile=/var/log/supervisor/supervisord.log ; (main log file;default $CWD/supervisord.log)
+pidfile=/var/run/supervisord.pid ; (supervisord pidfile;default supervisord.pid)
+childlogdir=/var/log/supervisor            ; ('AUTO' child log dir, default $TEMP)
+
+; the below section must remain in the config file for RPC
+; (supervisorctl/web interface) to work, additional interfaces may be
+; added by defining them in separate rpcinterface: sections
+[rpcinterface:supervisor]
+supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+[supervisorctl]
+serverurl=unix:///var/run/supervisor.sock ; use a unix:// URL  for a unix socket
+
+; The [include] section can just contain the "files" setting.  This
+; setting can list multiple files (separated by whitespace or
+; newlines).  It can also contain wildcards.  The filenames are
+; interpreted as relative to this file.  Included files *cannot*
+; include files themselves.
+
+[include]
+files = /etc/supervisor/conf.d/*.conf
+```
+
+- Activate python 3.8.0 in the shell
+```sh
+$ pyenv shell 3.8.0
+```
+
+- Install supervisor using `pip`
+```sh
+$ pip install supervisor
+```
+
+- Create supervisor service
+```sh
+$ sudo vi /etc/systemd/system/supervisor.service
+```
+
+```ini
+[Unit]
+Description=Supervisor process control system for UNIX
+Documentation=http://supervisord.org
+After=network.target
+
+[Service]
+ExecStart=/home/<user>/.pyenv/versions/3.8.0/bin/supervisord -n -c /etc/supervisor/supervisord.conf
+ExecStop=/home/<user>/.pyenv/versions/3.8.0/bin/supervisorctl $OPTIONS shutdown
+ExecReload=/home/<user>/.pyenv/versions/3.8.0/bin/supervisorctl -c /etc/supervisor/supervisord.conf $OPTIONS reload
+KillMode=process
+Restart=on-failure
+RestartSec=50s
+
+[Install]
+WantedBy=multi-user.target
+Alias=supervisord.service
+```
+
+**Note:**
+Replace user with actual $USER
+
+- Enable supervisor service
+```sh
+sudo su <<EOF
+sudo systemctl daemon-reload
+sudo systemctl enable supervisor
+sudo systemctl start supervisor
+EOF
+```
+
 
 ### Install CKAN
 
@@ -172,11 +353,11 @@ EOF
 
 ```sh
 $ mkdir -p ~/ckan/lib
-$ sudo ln -s ~/ckan/lib /usr/lib/ckan
+$ sudo ln -fs ~/ckan/lib /usr/lib/ckan
 $ mkdir -p ~/ckan/etc
-$ sudo ln -s ~/ckan/etc /etc/ckan
+$ sudo ln -fs ~/ckan/etc /etc/ckan
 $ mkdir -p ~/ckan/var/lib
-$ sudo ln -s ~/ckan/var/lib /var/lib/ckan
+$ sudo ln -fs ~/ckan/var/lib /var/lib/ckan
 ```
 
 - Create a Python(`python3`) virtual environment (virtualenv) to install CKAN into, and activate it.
@@ -184,6 +365,7 @@ $ sudo ln -s ~/ckan/var/lib /var/lib/ckan
 ```sh
 $ sudo mkdir -p /usr/lib/ckan/default
 $ sudo chown `whoami` /usr/lib/ckan/default
+$ pyenv shell 3.8.0
 $ python3 -m venv /usr/lib/ckan/default
 $ . /usr/lib/ckan/default/bin/activate
 ```
@@ -210,19 +392,21 @@ deactivate
 
 ## Configuration
 
+
 ### Configure PostgreSQL
 
-- Create a new PostgreSQL user called `ckan_default`
+- Create a new PostgreSQL user called `dlab_ckan_default`
 
 ```sh
-$ sudo -u postgres createuser -S -D -R -P ckan_default
+$ sudo -u postgres createuser -S -D -R -P dlab_ckan_default
 ```
 
-- Create a new PostgreSQL database, called ckan_default
+- Create a new PostgreSQL database, called dlab_ckan_default
 
 ```sh
-$ sudo -u postgres createdb -O ckan_default ckan_default -E utf-8
+$ sudo -u postgres createdb -O dlab_ckan_default dlab_ckan_default -E utf-8
 ```
+
 
 ### Configure CKAN
 
@@ -241,11 +425,16 @@ $ ckan generate config /etc/ckan/default/ckan.ini
 
 - Edit `ckan.ini` to include the following configurations
 
-```ini
-sqlalchemy.url = postgresql://ckan_default:<ckan_default_pass>@localhost/ckan_default
-ckan.site_id = default
-ckan.site_url = http://127.0.0.1:5000 (or http://<sub-domain>.<domain>.<com|org>)
+```sh
+sudo vi /etc/ckan/default/ckan.ini
 ```
+
+```ini
+sqlalchemy.url = postgresql://dlab_ckan_default:<dlab_ckan_default_pass>@localhost/dlab_ckan_default
+ckan.site_id = default
+ckan.site_url = http://<public_ip>:5000
+```
+
 
 ### Configure Apache Solr
 
@@ -277,8 +466,6 @@ $ sudo ln -s /usr/lib/ckan/default/src/ckan/ckan/config/solr/schema.xml /etc/sol
 - Now restart Tomcat & Solr
 
 ```sh
-$ sudo mv /etc/systemd/system/tomcat9.d /etc/systemd/system/tomcat9.service.d
-$ sudo systemctl daemon-reload
 $ sudo systemctl restart tomcat9
 ```
 
@@ -292,11 +479,13 @@ $ sudo vi /etc/ckan/default/ckan.ini
 solr_url=http://127.0.0.1:8983/solr
 ```
 
+
 ### Configure who.ini
 
 ```sh
 $ ln -s /usr/lib/ckan/default/src/ckan/who.ini /etc/ckan/default/who.ini
 ```
+
 
 ### Create CKAN database tables
 
@@ -304,6 +493,7 @@ $ ln -s /usr/lib/ckan/default/src/ckan/who.ini /etc/ckan/default/who.ini
 $ cd /usr/lib/ckan/default/src/ckan
 $ ckan -c /etc/ckan/default/ckan.ini db init
 ```
+
 
 ### Set up the DataStore
 
@@ -317,11 +507,11 @@ $ sudo vi /etc/ckan/default/ckan.ini
 ckan.plugins = stats text_view image_view recline_view datastore
 ```
 
-- Create user
+- Create user and database
 
 ```sh
-$ sudo -u postgres createuser -S -D -R -P -l datastore_default
-$ sudo -u postgres createdb -O ckan_default datastore_default -E utf-8
+$ sudo -u postgres createuser -S -D -R -P -l dlab_datastore_default
+$ sudo -u postgres createdb -O dlab_ckan_default dlab_datastore_default -E utf-8
 ```
 
 - Set datastore URLs
@@ -330,8 +520,8 @@ $ sudo vi /etc/ckan/default/ckan.ini
 ```
 
 ```ini
-ckan.datastore.write_url = postgresql://ckan_default:<ckan_default_pass>@localhost/datastore_default
-ckan.datastore.read_url = postgresql://datastore_default:<datastore_default_pass>@localhost/datastore_default
+ckan.datastore.write_url = postgresql://dlab_ckan_default:<dlab_ckan_default_pass>@localhost/dlab_datastore_default
+ckan.datastore.read_url = postgresql://dlab_datastore_default:<dlab_datastore_default_pass>@localhost/dlab_datastore_default
 ```
 
 - Set permissions
@@ -347,26 +537,18 @@ If failed, copy output of
 $ ckan -c /etc/ckan/default/ckan.ini datastore set-permissions
 ```
 
-- Restart CKAN to Test and verify
 
-```sh
-$ cd /usr/lib/ckan/default/src/ckan
-$ ckan -c /etc/ckan/default/ckan.ini run
-$ curl -X GET "http://127.0.0.1:5000/api/3/action/datastore_search?resource_id=_table_metadata"
-```
+### Setup DataPusher
 
-### DataPusher Configuration (TODO)
+> TODO
 
-```ini
-ckan.plugins = <other plugins> datapusher
-ckan.datapusher.url = http://127.0.0.1:8800/
-```
 
 ### Production Deployment
 
 - Deactivate and re-activate CKAN Python virtual environment
 
 ```sh
+$ pyenv shell 3.8.0
 $ deactivate
 $ . /usr/lib/ckan/default/bin/activate
 ```
@@ -387,13 +569,13 @@ $ pip install -U uwsgi
 $ sudo cp /usr/lib/ckan/default/src/ckan/ckan-uwsgi.ini /etc/ckan/default/
 ```
 
-- Ensure Supervisor for the uwsgi
-
+- Change `ckan-uwsgi` port to `5000`
 ```sh
-sudo su <<EOF
-sudo apt-get install -y supervisor
-sudo systemctl restart supervisor
-EOF
+$ sudo vi /etc/ckan/default/ckan-uwsgi.ini
+```
+
+```ini
+http            =  0.0.0.0:5000
 ```
 
 - Create uwsgi supervisor configuration file
@@ -401,7 +583,7 @@ EOF
 $ sudo vi /etc/supervisor/conf.d/ckan-uwsgi.conf
 ```
 
-```conf
+```ini
 [program:ckan-uwsgi]
 
 command=/usr/lib/ckan/default/bin/uwsgi -i /etc/ckan/default/ckan-uwsgi.ini
@@ -432,6 +614,17 @@ stopwaitsecs = 600
 stopsignal=QUIT
 ```
 
+- Allow `5000` from firewall
+```sh
+$ sudo ufw allow 5000/tcp
+```
+
+- Restart Supervisor
+
+```sh
+$ sudo systemctl restart supervisor
+```
+
 - Create the NGINX config file
 
 ```sh
@@ -445,7 +638,7 @@ proxy_temp_path /tmp/nginx_proxy 1 2;
 server {
     client_max_body_size 100M;
     location / {
-        proxy_pass http://127.0.0.1:8080/;
+        proxy_pass http://127.0.0.1:5000/;
         proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header Host $host;
         proxy_cache cache;
@@ -460,35 +653,12 @@ server {
 }
 ```
 
-- Disable your default nginx sites and restart
+- Enable CKAN sites and restart
 
 ```sh
-$ sudo rm -vi /etc/nginx/sites-enabled/default
 $ sudo ln -s /etc/nginx/sites-available/ckan /etc/nginx/sites-enabled/ckan
-$ sudo service restart nginx
+$ sudo nginx -t
+$ sudo systemctl restart nginx
 ```
 
-### Setup a worker for background jobs
-
-- Copy the configuration file template
-```sh
-$ sudo cp /usr/lib/ckan/default/src/ckan/ckan/config/supervisor-ckan-worker.conf /etc/supervisor/conf.d
-```
-
-- Restart Supervisor
-
-```sh
-$ sudo service restart supervisor
-```
-
-- Restart the CKAN worker via
-
-```sh
-$ sudo supervisorctl restart ckan-worker:*
-```
-
-- Test that background jobs are processed correctly
-
-```sh
-$ ckan -c |ckan.ini| jobs test
-```
+Check [maintainers guide](https://github.com/dlab-tz/dlab_portal/blob/master/MAINTAINERS.md) for further configurations and management tasks.
